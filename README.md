@@ -1,4 +1,4 @@
-# Gentoo Prepair chroot!
+# Gentoo Prepair chroot
 
 Этот скрипт скачивает и распаковывает указанную Вами редакцию Gentoo в рабочую директорию /mnt/gentoo.
 
