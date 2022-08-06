@@ -23,12 +23,11 @@ func main() {
 
 func prepare() string {
 	var targetDir string = "/mnt/gentoo"
-	var n int
+	var numberOfDrive int
 	fmt.Printf("Welcome to Gentoo easy chrooting!\n\n")
 	re := regexp.MustCompile("/dev/[a-z]{3}[0-9]|/dev/(.*?)p[0-9]")
-	a, _ := exec.Command("lsblk", "-lnpo", "KNAME").Output()
-	drives := re.FindAllString(string(a), -1)
-	// z := strings.SplitN(string(b), "\n", -1)
+	lsblk, _ := exec.Command("lsblk", "-lnpo", "KNAME").Output()
+	drives := re.FindAllString(string(lsblk), -1)
 
 	for n, i := range drives {
 		n++
@@ -37,19 +36,19 @@ func prepare() string {
 	}
 
 	fmt.Println("\nSelect root drive: ")
-	_, err := fmt.Scanf("%d", &n)
+	_, err := fmt.Scanf("%d", &numberOfDrive)
 	if err != nil {
 		log.Fatalf("Please, input digit.")
-	} else if n > len(drives) {
+	} else if numberOfDrive > len(drives) {
 		log.Fatal("Please, input number of range.")
 	}
 
 	fmt.Printf("\n----------\n\n")
 	os.MkdirAll(targetDir, os.ModePerm)
 
-	_, err = exec.Command("mount", drives[n], targetDir).Output()
+	_, err = exec.Command("mount", drives[numberOfDrive], targetDir).Output()
 	if err != nil {
-		fmt.Printf("Mounting error.\n1. Try umount %s after run this script.\n2. Check mounting drive for valid.\n\n ", drives[n])
+		fmt.Printf("Mounting error.\n1. Try umount %s after run this script.\n2. Check mounting drive for valid.\n\n ", drives[numberOfDrive])
 		os.Exit(0)
 	}
 	return targetDir
