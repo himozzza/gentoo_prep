@@ -8,14 +8,24 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"regexp"
 	"sort"
+	"strings"
+	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 func main() {
+	user, _ := user.Current()
+	if user.Username != "root" {
+		log.Fatalf("\nYou must be root, not %s!\n", user.Username)
+	}
+
 	targetDir := prepare()
-	selectDistr := selectDist(targetDir)
-	release, pattern := parsingData(selectDistr)
+	selectDistr, DistRelease := selectDist(targetDir)
+	release, pattern := parsingData(selectDistr, DistRelease)
 	downloadData(release, pattern, targetDir)
 	mounting(targetDir)
 }
@@ -44,7 +54,7 @@ func prepare() string {
 	} else if numberOfDrive > len(drives) {
 		log.Fatal("Please, input number of range.")
 	}
-
+	numberOfDrive--
 	fmt.Printf("\n----------\n\n")
 	os.MkdirAll(targetDir, os.ModePerm)
 
@@ -56,17 +66,24 @@ func prepare() string {
 	return targetDir
 }
 
-func selectDist(targetDir string) string {
+func selectDist(targetDir string) (string, string) {
 	/*
 		Выбор дистрибутива.
 	*/
-	var selectDistr int
-	DistRelease := map[int]string{
-		1: "stage3-amd64-desktop-openrc",
-		2: "stage3-amd64-desktop-systemd",
-		3: "stage3-amd64-nomultilib-openrc",
-		4: "stage3-amd64-nomultilib-systemd",
+	homeURL := fmt.Sprintf("https://mirror.yandex.ru/gentoo-distfiles/releases/amd64/autobuilds/")
+	resp, _ := http.Get(homeURL)
+
+	url, _ := io.ReadAll(resp.Body)
+	re := regexp.MustCompile("stage3-(.*?)[^txt]\"")
+	prepre := re.FindAllString(string(url), -1)
+	DistRelease := make(map[int]string)
+	for n, i := range prepre {
+		n++
+		i = strings.Replace(i, "/\"", "", -1)
+		DistRelease[n] = string(i)
 	}
+
+	var selectDistr int
 
 	keys := make([]int, 0)
 
@@ -82,7 +99,7 @@ func selectDist(targetDir string) string {
 	fmt.Printf("\nSelect Distr: ")
 
 	_, err := fmt.Scanf("%d", &selectDistr)
-	fmt.Printf("\n----------\n\n")
+	fmt.Printf("\n----------\n")
 	if err != nil {
 		exec.Command("umount", "-R", targetDir).Run()
 		log.Fatal("\nInput error! Select the gentoo redaction number.\n\n")
@@ -90,17 +107,18 @@ func selectDist(targetDir string) string {
 		exec.Command("umount", "-R", targetDir).Run()
 		log.Fatal("\nInput error! Number out of range.\n\n")
 	}
-
-	return DistRelease[selectDistr]
+	sel := fmt.Sprintf("%scurrent-%s", homeURL, DistRelease[selectDistr])
+	return sel, DistRelease[selectDistr]
 }
 
-func parsingData(selectDistr string) (string, string) {
+func parsingData(selectDistr, DistRelease string) (string, string) {
 	/*
 		Получаем url до выбранного дистрибутива.
 	*/
-	pattern := fmt.Sprintf("%s-[0-9]{8}[A-Z][0-9]{6}[A-Z].tar.xz", selectDistr)
+	pattern := fmt.Sprintf("%s-[0-9]{8}[A-Z][0-9]{6}[A-Z].tar.xz", DistRelease)
 	re := regexp.MustCompile(pattern)
-	prepareURL := fmt.Sprintf("https://mirror.yandex.ru/gentoo-distfiles/releases/amd64/autobuilds/current-%s/", selectDistr)
+
+	prepareURL := fmt.Sprintf("%s/", selectDistr)
 	resp, err := http.Get(prepareURL)
 	if err != nil {
 		log.Fatal(err)
@@ -121,24 +139,29 @@ func downloadData(release, pattern, targetDir string) {
 	/*
 		Скачивание и распаковка дистрибутива.
 	*/
-	fmt.Printf("\nDownloadind %s...\n", pattern)
+	fmt.Printf("\nDownloading %s...\n", pattern)
 	os.Chdir(targetDir)
-	download, err := http.Get(release)
+
+	req, _ := http.NewRequest("GET", release, nil)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Println(err)
 	}
-	defer download.Body.Close()
+	defer resp.Body.Close()
 
-	out, err := os.Create(pattern)
-	if err != nil {
-		log.Println(err)
-	}
-	defer out.Close()
+	f, _ := os.OpenFile(pattern, os.O_CREATE|os.O_WRONLY, 0644)
+	defer f.Close()
 
-	_, err = io.Copy(out, download.Body)
+	bar := progressbar.DefaultBytes(
+		resp.ContentLength,
+		"",
+	)
+	io.Copy(io.MultiWriter(f, bar), resp.Body)
 
 	fmt.Printf("Unpacking tar.xz file...\n")
 	exec.Command("tar", "xpvf", pattern, "--xattrs-include='*.*'", "--numeric-owner").Run()
+	time.Sleep(1 * time.Second)
+	os.Remove(pattern)
 }
 
 func mounting(targetDir string) {
