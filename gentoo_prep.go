@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
-	"syscall"
 )
 
 func main() {
@@ -22,6 +21,9 @@ func main() {
 }
 
 func prepare() string {
+	/*
+		Выбор диска и монтирование раздела в /mnt/gentoo.
+	*/
 	var targetDir string = "/mnt/gentoo"
 	var numberOfDrive int
 	fmt.Printf("Welcome to Gentoo easy chrooting!\n\n")
@@ -55,6 +57,9 @@ func prepare() string {
 }
 
 func selectDist(targetDir string) string {
+	/*
+		Выбор дистрибутива.
+	*/
 	var selectDistr int
 	DistRelease := map[int]string{
 		1: "stage3-amd64-desktop-openrc",
@@ -90,6 +95,9 @@ func selectDist(targetDir string) string {
 }
 
 func parsingData(selectDistr string) (string, string) {
+	/*
+		Получаем url до выбранного дистрибутива.
+	*/
 	pattern := fmt.Sprintf("%s-[0-9]{8}[A-Z][0-9]{6}[A-Z].tar.xz", selectDistr)
 	re := regexp.MustCompile(pattern)
 	prepareURL := fmt.Sprintf("https://mirror.yandex.ru/gentoo-distfiles/releases/amd64/autobuilds/current-%s/", selectDistr)
@@ -110,6 +118,9 @@ func parsingData(selectDistr string) (string, string) {
 }
 
 func downloadData(release, pattern, targetDir string) {
+	/*
+		Скачивание и распаковка дистрибутива.
+	*/
 	fmt.Printf("\nDownloadind %s...\n", pattern)
 	os.Chdir(targetDir)
 	download, err := http.Get(release)
@@ -131,6 +142,9 @@ func downloadData(release, pattern, targetDir string) {
 }
 
 func mounting(targetDir string) {
+	/*
+		Монтирование.
+	*/
 	os.Chdir(targetDir)
 	fmt.Printf("Mounting and Chrooting...\n")
 	exec.Command("cp", "--dereference", "/etc/resolv.conf", "etc/").Run()
@@ -141,11 +155,7 @@ func mounting(targetDir string) {
 	exec.Command("mount", "--make-rslave", "dev").Run()
 	exec.Command("mount", "--bind", "/run", "run").Run()
 	exec.Command("mount", "--make-slave", "run").Run()
-	syscall.Chroot("/mnt/gentoo")
-	os.Chdir("/")
-	exec.Command("source", "/etc/profile").Run()
 
-	exec.Command("emerge-webrsync").Run()
 	fmt.Printf("Complete!\n\n")
 
 	fmt.Printf("ATTENTION!!!\nInput 'chroot %s /bin/bash' and 'source /etc/profile' for chrooting to your new Gentoo :)\n\n", targetDir)
