@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
+	"syscall"
 )
 
 func main() {
@@ -22,21 +23,33 @@ func main() {
 
 func prepare() string {
 	var targetDir string = "/mnt/gentoo"
-	var drive string
-
+	var n int
 	fmt.Printf("Welcome to Gentoo easy chrooting!\n\n")
+	re := regexp.MustCompile("/dev/[a-z]{3}[0-9]|/dev/(.*?)p[0-9]")
+	a, _ := exec.Command("lsblk", "-lnpo", "KNAME").Output()
+	drives := re.FindAllString(string(a), -1)
+	// z := strings.SplitN(string(b), "\n", -1)
 
-	a, _ := exec.Command("lsblk").Output()
-	fmt.Printf("\n%s", string(a))
+	for n, i := range drives {
+		n++
+		fmt.Printf("%d) %s", n, string(i))
+		fmt.Println(" ")
+	}
 
 	fmt.Println("\nSelect root drive: ")
-	fmt.Scanf("%s", &drive)
-	fmt.Printf("\n----------\n\n")
-
-	os.MkdirAll(targetDir, os.ModePerm)
-	_, err := exec.Command("mount", drive, targetDir).Output()
+	_, err := fmt.Scanf("%d", &n)
 	if err != nil {
-		fmt.Printf("Mounting error.\n1. Try umount %s after run this script.\n2. Check mounting drive for valid.\n\n ", drive)
+		log.Fatalf("Please, input digit.")
+	} else if n > len(drives) {
+		log.Fatal("Please, input number of range.")
+	}
+
+	fmt.Printf("\n----------\n\n")
+	os.MkdirAll(targetDir, os.ModePerm)
+
+	_, err = exec.Command("mount", drives[n], targetDir).Output()
+	if err != nil {
+		fmt.Printf("Mounting error.\n1. Try umount %s after run this script.\n2. Check mounting drive for valid.\n\n ", drives[n])
 		os.Exit(0)
 	}
 	return targetDir
@@ -120,7 +133,7 @@ func downloadData(release, pattern, targetDir string) {
 
 func mounting(targetDir string) {
 	os.Chdir(targetDir)
-	fmt.Printf("Mountong and Chrooting...\n")
+	fmt.Printf("Mounting and Chrooting...\n")
 	exec.Command("cp", "--dereference", "/etc/resolv.conf", "etc/").Run()
 	exec.Command("mount", "--types", "proc", "/proc", "proc").Run()
 	exec.Command("mount", "--rbind", "/sys", "sys").Run()
@@ -129,6 +142,11 @@ func mounting(targetDir string) {
 	exec.Command("mount", "--make-rslave", "dev").Run()
 	exec.Command("mount", "--bind", "/run", "run").Run()
 	exec.Command("mount", "--make-slave", "run").Run()
+	syscall.Chroot("/mnt/gentoo")
+	os.Chdir("/")
+	exec.Command("source", "/etc/profile").Run()
+
+	exec.Command("emerge-webrsync").Run()
 	fmt.Printf("Complete!\n\n")
 
 	fmt.Printf("ATTENTION!!!\nInput 'chroot %s /bin/bash' and 'source /etc/profile' for chrooting to your new Gentoo :)\n\n", targetDir)
