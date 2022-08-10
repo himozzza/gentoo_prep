@@ -22,12 +22,18 @@ func main() {
 	if user.Username != "root" {
 		log.Fatalf("\nYou must be root, not %s!\n", user.Username)
 	}
-
+	arguments := os.Args
 	targetDir := prepare()
-	selectDistr, DistRelease := selectDist(targetDir)
-	release, pattern := parsingData(selectDistr, DistRelease)
-	downloadData(release, pattern, targetDir)
-	mounting(targetDir)
+	if arguments[1] == "--mount" || arguments[1] == "-m" {
+		mounting(targetDir)
+	} else if arguments[1] == "--help" || arguments[1] == "-h" {
+		fmt.Printf("-m, --mount    Mounting and chroot without downloading stage3.\n-h, --help    Print this help page.\n\n")
+	} else {
+		selectDistr, DistRelease := selectDist(targetDir)
+		release, pattern := parsingData(selectDistr, DistRelease)
+		downloadData(release, pattern, targetDir)
+		mounting(targetDir)
+	}
 }
 
 func prepare() string {
