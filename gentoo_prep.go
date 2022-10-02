@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -24,10 +23,12 @@ func main() {
 	}
 	arguments := os.Args
 	targetDir := prepare()
-	if arguments[1] == "--mount" || arguments[1] == "-m" {
-		mounting(targetDir)
-	} else if arguments[1] == "--help" || arguments[1] == "-h" {
-		fmt.Printf("-m, --mount    Mounting and chroot without downloading stage3.\n-h, --help    Print this help page.\n\n")
+	if len(arguments) >= 2 {
+		if arguments[1] == "--mount" || arguments[1] == "-m" {
+			mounting(targetDir)
+		} else if arguments[1] == "--help" || arguments[1] == "-h" {
+			fmt.Printf("-m, --mount    Mounting and chroot without downloading stage3.\n-h, --help    Print this help page.\n\n")
+		}
 	} else {
 		selectDistr, DistRelease := selectDist(targetDir)
 		release, pattern := parsingData(selectDistr, DistRelease)
@@ -63,8 +64,7 @@ func prepare() string {
 	numberOfDrive--
 	fmt.Printf("\n----------\n\n")
 	os.MkdirAll(targetDir, os.ModePerm)
-
-	_, err = exec.Command("mount", drives[numberOfDrive], targetDir).Output()
+	err = exec.Command("mount", drives[numberOfDrive], targetDir).Run()
 	if err != nil {
 		fmt.Printf("Mounting error.\n1. Try umount %s after run this script.\n2. Check mounting drive for valid.\n\n ", drives[numberOfDrive])
 		os.Exit(0)
@@ -76,7 +76,7 @@ func selectDist(targetDir string) (string, string) {
 	/*
 		Выбор дистрибутива.
 	*/
-	homeURL := fmt.Sprintf("https://mirror.yandex.ru/gentoo-distfiles/releases/amd64/autobuilds/")
+	homeURL := "https://mirror.yandex.ru/gentoo-distfiles/releases/amd64/autobuilds/"
 	resp, _ := http.Get(homeURL)
 
 	url, _ := io.ReadAll(resp.Body)
@@ -131,7 +131,7 @@ func parsingData(selectDistr, DistRelease string) (string, string) {
 	}
 	defer resp.Body.Close()
 
-	url, err := ioutil.ReadAll(resp.Body)
+	url, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal("\nError Downloading.\n\n")
 	}
